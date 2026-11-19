@@ -1,122 +1,154 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+
+import { useEffect, useState } from "react";
+
+import Header from "./components/Header";
+import PromptForm from "./components/PromptForm";
+import GenerationSettings from "./components/GenerationSettings";
+import ImagePreview from "./components/ImagePreview";
+
+import { generateImage } from "./services/api";
+
+import "./App.css";
 
 function App() {
-  const [count, setCount] = useState(0)
+  // Prompt states
+  const [prompt, setPrompt] = useState("");
+  const [negativePrompt, setNegativePrompt] = useState("");
+
+  // Generation settings
+  const [steps, setSteps] = useState(20);
+  const [guidanceScale, setGuidanceScale] = useState(7.5);
+  const [seed, setSeed] = useState(-1);
+
+  // Application states
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [imageUrl, setImageUrl] = useState(null);
+  const [error, setError] = useState("");
+
+  // Release temporary image URLs when replaced or unmounted
+  useEffect(() => {
+    return () => {
+      if (imageUrl) {
+        URL.revokeObjectURL(imageUrl);
+      }
+    };
+  }, [imageUrl]);
+
+  async function handleGenerate(event) {
+    event.preventDefault();
+
+    if (!prompt.trim()) {
+      setError("Please enter a description for your image.");
+      return;
+    }
+
+    if (prompt.length > 1000 || negativePrompt.length > 1000) {
+      setError("Your prompts cannot exceed 1000 characters.");
+      return;
+    }
+
+    if (!Number.isInteger(seed) || seed < -1) {
+      setError("Seed must be an integer greater than or equal to -1.");
+      return;
+    }
+
+    setIsGenerating(true);
+    setError("");
+
+    try {
+      const payload = {
+        prompt: prompt.trim(),
+        negative_prompt: negativePrompt.trim(),
+        steps,
+        guidance_scale: guidanceScale,
+        seed,
+      };
+
+      const imageBlob = await generateImage(payload);
+
+      const newImageUrl = URL.createObjectURL(imageBlob);
+
+      setImageUrl(newImageUrl);
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
+    <div className="app">
+      <Header />
+
+      <main className="main-content">
+        <section className="hero-section">
+          <span className="eyebrow">
+            AI-POWERED IMAGE GENERATION
+          </span>
+
+          <h1>
+            Your imagination.
+            <span> Without limits.</span>
+          </h1>
+
           <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
+            Transform your ideas into stunning visuals
+            using artificial intelligence.
           </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+        </section>
 
-      <div className="ticks"></div>
+        <section className="generator-section" id="generator">
+          <div className="section-heading">
+            <h2>Image Studio</h2>
+            <p>Describe what you want to create.</p>
+          </div>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+          <div className="studio-layout">
+            <form
+              className="studio-controls"
+              onSubmit={handleGenerate}
+            >
+              <PromptForm
+                prompt={prompt}
+                setPrompt={setPrompt}
+                negativePrompt={negativePrompt}
+                setNegativePrompt={setNegativePrompt}
+              />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+              <GenerationSettings
+                steps={steps}
+                setSteps={setSteps}
+                guidanceScale={guidanceScale}
+                setGuidanceScale={setGuidanceScale}
+                seed={seed}
+                setSeed={setSeed}
+              />
+
+              <button
+                type="submit"
+                className="generate-button"
+                disabled={isGenerating}
+              >
+                {isGenerating
+                  ? "Generating Image..."
+                  : "✦ Generate Image"}
+              </button>
+            </form>
+
+            <ImagePreview
+              imageUrl={imageUrl}
+              isGenerating={isGenerating}
+              error={error}
+            />
+          </div>
+        </section>
+      </main>
+
+      <footer className="app-footer" id="about">
+        <p>ImagineAI · Powered by Stable Diffusion 1.5</p>
+      </footer>
+    </div>
+  );
 }
 
-export default App
+export default App;
