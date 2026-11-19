@@ -1,5 +1,7 @@
 
 import os
+import logging
+
 from functools import lru_cache
 from pathlib import Path
 from mimetypes import guess_type
@@ -15,19 +17,31 @@ from gradio_client import Client
 # 1. APPLICATION CONFIGURATION
 # ==========================================
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = FastAPI(
-    title="Text-to-Image API",
-    description="AI image generation using Stable Diffusion 1.5",
-    version="1.0.0"
+    title="ImagineAI API",
+    description="Photorealistic image generation powered by RealVisXL V5.0",
+    version="1.1.0"
 )
 
-# Allow requests from the React development server.
+# Read allowed frontend origins from environment variables.
+# Fall back to local development addresses.
+allowed_origins = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173"
+)
+
+origins = [
+    origin.strip()
+    for origin in allowed_origins.split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,6 +51,8 @@ SPACE_ID = os.getenv(
     "HF_SPACE_ID",
     "obacodes/text-to-image-inference"
 )
+
+API_NAME = "/generate_image"
 
 
 # ==========================================
@@ -57,13 +73,13 @@ class ImageGenerationRequest(BaseModel):
     )
 
     steps: int = Field(
-        default=20,
+        default=30,
         ge=10,
         le=40
     )
 
     guidance_scale: float = Field(
-        default=7.5,
+        default=5.5,
         ge=1,
         le=12
     )
@@ -81,6 +97,8 @@ class ImageGenerationRequest(BaseModel):
 @lru_cache(maxsize=1)
 def get_huggingface_client():
 
+    logger.info("Connecting to Hugging Face Space: %s", SPACE_ID)
+
     return Client(SPACE_ID)
 
 
@@ -92,8 +110,9 @@ def get_huggingface_client():
 def home():
 
     return {
-        "message": "Text-to-Image API is running",
-        "service": "Stable Diffusion 1.5",
+        "message": "ImagineAI API is running",
+        "service": "RealVisXL V5.0",
+        "inference_provider": "Hugging Face",
         "inference_space": SPACE_ID
     }
 
@@ -103,6 +122,7 @@ def health_check():
 
     return {
         "status": "healthy",
+        "service": "ImagineAI API",
         "inference_provider": "Hugging Face"
     }
 
@@ -118,28 +138,28 @@ def generate_image(request: ImageGenerationRequest):
 
         client = get_huggingface_client()
 
-        # Send the request to our Hugging Face Space.
+        logger.info("Starting image generation request")
+
         generated_image = client.predict(
-            prompt=request.prompt,
+            prompt=request.prompt.strip(),
             negative_prompt=request.negative_prompt,
             steps=request.steps,
             guidance_scale=request.guidance_scale,
             seed=request.seed,
-            api_name="/generate_image"
+            api_name=API_NAME
         )
 
-        # Gradio returns a local filepath.
         image_path = Path(generated_image)
 
         if not image_path.is_file():
 
             raise RuntimeError(
-                "Inference completed but the generated image file "
-                "could not be located."
+                "Generated image file could not be located."
             )
 
-        # Return the generated image to the requester.
         media_type = guess_type(image_path.name)[0] or "image/png"
+
+        logger.info("Image generation completed successfully")
 
         return FileResponse(
             path=image_path,
@@ -147,11 +167,11 @@ def generate_image(request: ImageGenerationRequest):
             filename=image_path.name
         )
 
-    except Exception as error:
+    except Exception:
 
-        print(f"Image generation error: {error}")
+        logger.exception("Image generation failed")
 
         raise HTTPException(
             status_code=502,
-            detail="Image generation failed. Check the inference service and try again."
+            detail="Image generation failed. Please try again later."
         )
