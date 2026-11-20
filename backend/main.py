@@ -31,11 +31,11 @@ app = FastAPI(
 allowed_origins = os.getenv(
     "ALLOWED_ORIGINS",
     "http://localhost:5173,http://127.0.0.1:5173"
-)
+).split(",")
 
 origins = [
-    origin.strip()
-    for origin in allowed_origins.split(",")
+    origin.strip().rstrip("/")
+    for origin in allowed_origins
     if origin.strip()
 ]
 
